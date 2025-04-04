@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personas Detectadas</title>
+    <script>
+        function actualizarDatos() {
+            fetch('datos.json')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById("contador").innerText = data.cantidad;
+                })
+                .catch(error => console.error("Error al obtener datos:", error));
+        }
+
+        setInterval(actualizarDatos, 5000);  // Actualiza cada 5 segundos
+    </script>
+</head>
+<body>
+    <h1>Personas en el Área</h1>
+    <h2 id="contador">0</h2>
+</body>
+</html>
