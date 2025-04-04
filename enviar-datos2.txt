@@ -1,0 +1,131 @@
+#include <Arduino.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include "esp_wifi.h"
+
+#define MAX_DEVICES 50
+#define RESET_INTERVAL 30000 // Reinicio de variables cada 30 seg
+#define SERVER_URL "http://somospromo.altervista.org/recibir_datos.php"
+#define WIFI_SSID "TuSSID"
+#define WIFI_PASSWORD "TuClave"
+#define TIMEOUT 60000  // Un dispositivo se borra si no se detecta en 60 seg
+
+struct Device {
+    String mac;
+    unsigned long lastSeen;
+};
+
+Device detectedDevices[MAX_DEVICES];
+int deviceCount = 0;
+unsigned long lastResetTime = 0;
+
+// Función para actualizar la lista de dispositivos detectados
+void updateDeviceList(String mac) {
+    unsigned long currentTime = millis();
+
+    // Verifica si el dispositivo ya está en la lista
+    for (int i = 0; i < deviceCount; i++) {
+        if (detectedDevices[i].mac == mac) {
+            detectedDevices[i].lastSeen = currentTime;
+            return;
+        }
+    }
+
+    // Si el dispositivo no está en la lista y hay espacio, lo agrega
+    if (deviceCount < MAX_DEVICES) {
+        detectedDevices[deviceCount].mac = mac;
+        detectedDevices[deviceCount].lastSeen = currentTime;
+        deviceCount++;
+    }
+}
+
+// Elimina dispositivos que han estado inactivos por más de TIMEOUT
+void removeOldDevices() {
+    unsigned long currentTime = millis();
+    int newCount = 0;
+
+    for (int i = 0; i < deviceCount; i++) {
+        if (currentTime - detectedDevices[i].lastSeen < TIMEOUT) {
+            detectedDevices[newCount++] = detectedDevices[i];
+        }
+    }
+
+    deviceCount = newCount;
+}
+
+// Callback para capturar paquetes en modo promiscuo
+void snifferCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
+    wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*) buf;
+    uint8_t *macAddr = pkt->payload + 10;
+    char macStr[18];
+
+    // Convierte la dirección MAC a formato legible
+    sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", 
+            macAddr[0], macAddr[1], macAddr[2], macAddr[3], macAddr[4], macAddr[5]);
+
+    // Filtra direcciones MAC aleatorias
+    if ((macAddr[0] & 0x02) == 0x02) return;
+
+    updateDeviceList(macStr);
+}
+
+// Función para enviar datos al servidor
+void enviarDatos() {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin(SERVER_URL);
+        http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+        // Formato de datos enviados
+        String postData = "cantidad=" + String(deviceCount);
+        int httpResponseCode = http.POST(postData);
+
+        Serial.print("Respuesta del servidor: ");
+        Serial.println(httpResponseCode);
+
+        http.end();
+    } else {
+        Serial.println("Error: No hay conexión Wi-Fi.");
+    }
+}
+
+void setup() {
+    Serial.begin(115200);
+
+    // Configura WiFi en modo STA y conéctate a la red
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("\nConectado a Wi-Fi.");
+
+    // Configurar el modo promiscuo para detección de dispositivos
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_promiscuous_rx_cb(&snifferCallback);
+    esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);  // Puedes cambiar el canal
+
+    lastResetTime = millis();
+}
+
+void loop() {
+    unsigned long currentTime = millis();
+
+    // Reinicia variables cada RESET_INTERVAL
+    if (currentTime - lastResetTime > RESET_INTERVAL) {
+        removeOldDevices(); // Elimina dispositivos inactivos
+        lastResetTime = currentTime;
+        Serial.println("Lista de dispositivos reiniciada.");
+    }
+
+    // Mostrar dispositivos detectados
+    Serial.print("Dispositivos detectados: ");
+    Serial.println(deviceCount);
+
+    // Enviar datos al servidor cada 10 seg
+    enviarDatos();
+
+    delay(10000);
+}
