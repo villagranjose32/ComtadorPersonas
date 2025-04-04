@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personas Detectadas</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f9f9f9; }
+        h1 { color: #333; }
+        #contador { font-size: 48px; font-weight: bold; margin: 20px 0; }
+        .alerta { color: red; font-weight: bold; font-size: 24px; }
+        .stats { margin-top: 10px; font-size: 18px; }
+        canvas { max-width: 600px; margin: 20px auto; display: block; }
+    </style>
+</head>
+<body>
+    <h1>Personas en el Área</h1>
+    <div id="contador">0</div>
+    <div id="alerta" class="alerta"></div>
+    <div class="stats">
+        Máximo: <span id="max">0</span> |
+        Mínimo: <span id="min">0</span> |
+        Promedio: <span id="avg">0</span>
+    </div>
+    <canvas id="grafico"></canvas>
+
+    <script>
+        let labels = [];
+        let data = [];
+        let maxP = 0;
+        let minP = 0;
+        let total = 0;
+        let count = 0;
+        const LIMITE_ALERTA = 10; // Alerta si supera este número
+
+        const ctx = document.getElementById('grafico').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Personas Detectadas',
+                    data: data,
+                    borderColor: 'blue',
+                    fill: false,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        function actualizarDatos() {
+            fetch('datos.json')
+                .then(response => response.json())
+                .then(json => {
+                    const cantidad = parseInt(json.cantidad);
+                    const ahora = new Date();
+                    const hora = ahora.toLocaleTimeString();
+
+                    // Actualiza contador
+                    document.getElementById("contador").innerText = cantidad;
+
+                    // Alerta visual
+                    if (cantidad > LIMITE_ALERTA) {
+                        document.getElementById("alerta").innerText = "⚠ ¡Área muy concurrida!";
+                    } else {
+                        document.getElementById("alerta").innerText = "";
+                    }
+
+                    // Estadísticas
+                    if (count === 0) {
+                        maxP = minP = cantidad;
+                        total = cantidad;
+                        count = 1;
+                    } else {
+                        maxP = Math.max(maxP, cantidad);
+                        minP = Math.min(minP, cantidad);
+                        total += cantidad;
+                        count++;
+                    }
+
+                    document.getElementById("max").innerText = maxP;
+                    document.getElementById("min").innerText = minP;
+                    document.getElementById("avg").innerText = (total / count).toFixed(1);
+
+                    // Actualiza gráfico
+                    labels.push(hora);
+                    data.push(cantidad);
+                    if (labels.length > 30) {
+                        labels.shift();
+                        data.shift();
+                    }
+                    chart.update();
+                })
+                .catch(err => {
+                    console.error("Error al obtener datos:", err);
+                });
+        }
+
+        setInterval(actualizarDatos, 5000);
+        actualizarDatos();
+    </script>
+</body>
+</html>
