@@ -1,0 +1,57 @@
+#include WiFi.h
+#include HTTPClient.h
+
+#define SERVER_URL "http://somospromo.altervista.org/recibir_datos.php"
+
+int dispositivos_detectados = 0;
+
+ Función de callback cuando se recibe un paquete Wi-Fi
+void snifferCallback(void buf, wifi_promiscuous_pkt_type_t type) {
+    if (type != WIFI_PKT_MGMT) return;   Filtrar solo paquetes de gestión (beacons, probe requests, etc.)
+
+    dispositivos_detectados++;  Contamos cada dispositivo
+}
+
+void enviarDatos() {
+    if (WiFi.status() == WL_CONNECTED) {
+        HTTPClient http;
+        http.begin(SERVER_URL);
+
+        http.addHeader(Content-Type, applicationx-www-form-urlencoded);
+
+         Enviar cantidad de dispositivos detectados
+        String postData = cantidad= + String(dispositivos_detectados);
+        int httpResponseCode = http.POST(postData);
+
+        Serial.print(Respuesta del servidor );
+        Serial.println(httpResponseCode);
+
+        http.end();
+    } else {
+        Serial.println(Error No hay conexión Wi-Fi.);
+    }
+}
+
+void setup() {
+    Serial.begin(115200);
+    
+    WiFi.mode(WIFI_STA);
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_promiscuous_rx_cb(&snifferCallback);
+
+    WiFi.begin(TuSSID, TuClave);   Conéctate a la red Wi-Fi
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(.);
+    }
+    Serial.println(nConectado a Wi-Fi.);
+}
+
+void loop() {
+    delay(10000);   Cada 10 segundos
+    Serial.print(Dispositivos detectados );
+    Serial.println(dispositivos_detectados);
+
+    enviarDatos();   Envía los datos al servidor
+    dispositivos_detectados = 0;   Reinicia el contador
+}
