@@ -4,7 +4,7 @@
 
 #define MAX_DEVICES 50
 #define RESET_INTERVAL 30000 // Intervalo de tiempo en milisegundos para reiniciar las variables
-
+#define SERVER_URL "http://somospromo.altervista.org/recibir_datos.php"
 struct Device {
     String mac;
     unsigned long lastSeen;
